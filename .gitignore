@@ -6,6 +6,8 @@ ENV/
 .venv/
 fine-tuned-gpt2/
 
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -160,3 +162,7 @@ ai-assistant-env/
 ENV/
 .env/
 .venv/
+
+#training
+
+results/
