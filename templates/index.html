@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+</head>
+<body>
+    <h1>AI Assistant</h1>
+    <form id="text-form">
+        <label for="input_text">Enter your prompt:</label><br>
+        <textarea id="input_text" name="input_text" rows="4" cols="50"></textarea><br><br>
+        <input type="button" value="Generate" onclick="generateText()">
+    </form>
+    <h2>Generated Text:</h2>
+    <p id="output_text"></p>
+
+    <script>
+        async function generateText() {
+            const inputText = document.getElementById("input_text").value;
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ input_text: inputText })
+            });
+            const result = await response.json();
+            document.getElementById("output_text").innerText = result.generated_text;
+        }
+    </script>
+</body>
+</html>
