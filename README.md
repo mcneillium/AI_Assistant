@@ -9,7 +9,7 @@ I first built it in 2023 and 2024 as my first hands-on language-model
 project, trained on a CPU on ConvAI2 plus some dialogues I wrote myself (that
 file has since been lost; the copy in the repository is empty). In November
 2026 I went back to it, fixed what was wrong, measured it properly, and
-retrained it on about five times as much conversation (see
+retrained it on more than six times as much conversation (see
 [Changes](#changes-november-2026)).
 
 ![The web chat page talking to the 2026 model](docs/screenshot-web.png)
