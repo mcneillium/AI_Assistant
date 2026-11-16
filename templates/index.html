@@ -26,7 +26,7 @@
 <body>
 <main>
   <h1>AI Assistant</h1>
-  <p class="note">GPT-2 (124M) fine-tuned on ConvAI2 chit-chat. It makes small talk; it does not know facts and will invent things.</p>
+  <p class="note">GPT-2 (124M) fine-tuned on three sets of everyday conversations. It makes small talk; it does not know facts and will invent things.</p>
   <div id="log" role="log" aria-live="polite" aria-label="Conversation"></div>
   <form id="f">
     <label for="input_text" class="note" style="position:absolute;left:-9999px">Message</label>
@@ -37,6 +37,8 @@
 <script>
   const log = document.getElementById('log'), input = document.getElementById('input_text'), send = document.getElementById('send');
   const history = [];
+  // ?seed=N makes a demo repeatable: turn k is sampled with seed N + k.
+  const seed = Number.parseInt(new URLSearchParams(location.search).get('seed') ?? '', 10);
   const add = (cls, text) => { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
   document.getElementById('f').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -44,7 +46,7 @@
     add('user', text); input.value = ''; send.disabled = true;
     try {
       const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input_text: text, history }) });
+        body: JSON.stringify({ input_text: text, history, seed: Number.isNaN(seed) ? undefined : seed + history.length }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       add('bot', j.generated_text || '…'); history.push([text, j.generated_text || '']);

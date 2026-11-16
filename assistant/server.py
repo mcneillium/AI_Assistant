@@ -1,4 +1,4 @@
-"""Flask API and web page. Run: python -m assistant.server --model models/gpt2-convai2"""
+"""Flask API and web page. Run: python -m assistant.server --model models/gpt2-chat"""
 import argparse
 import os
 from pathlib import Path
@@ -14,7 +14,7 @@ def create_app(model_dir=None, loaded=None):
     root = Path(__file__).resolve().parent.parent
     app = Flask(__name__, template_folder=str(root / "templates"))
     if loaded is None:
-        loaded = m.load(model_dir or os.environ.get("ASSISTANT_MODEL", "models/gpt2-convai2"))
+        loaded = m.load(model_dir or os.environ.get("ASSISTANT_MODEL", "models/gpt2-chat"))
     model, tok = loaded
 
     @app.after_request
@@ -42,7 +42,9 @@ def create_app(model_dir=None, loaded=None):
         if len(text) > MAX_INPUT_CHARS:
             return jsonify(error=f"Input is longer than {MAX_INPUT_CHARS} characters"), 400
         history = [(str(u), str(a)) for u, a in data.get("history", [])][-4:]
-        settings = m.GenerationSettings(seed=data.get("seed"))
+        seed = data.get("seed")  # optional, for repeatable demos; anything but a whole number is ignored
+        seed = seed if isinstance(seed, int) and not isinstance(seed, bool) and 0 <= seed < 2**32 else None
+        settings = m.GenerationSettings(seed=seed)
         return jsonify(generated_text=m.reply(model, tok, text, history, settings))
 
     return app
@@ -50,7 +52,7 @@ def create_app(model_dir=None, loaded=None):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default=os.environ.get("ASSISTANT_MODEL", "models/gpt2-convai2"))
+    ap.add_argument("--model", default=os.environ.get("ASSISTANT_MODEL", "models/gpt2-chat"))
     ap.add_argument("--port", type=int, default=5000)
     a = ap.parse_args()
     create_app(a.model).run(port=a.port)

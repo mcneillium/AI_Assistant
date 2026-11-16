@@ -132,7 +132,8 @@ def main():
     scores = {}
     for label, path in [("untuned " + a.base, a.base)] + [(Path(c).name, c) for c in a.compare] + [("this run", str(out))]:
         m = AutoModelForCausalLM.from_pretrained(path)
-        scores[label] = {n: round(perplexity(m, tok, held[n], a.batch, bf16), 2) for n in names}
+        # Scored in full precision: bfloat16 shifts perplexity by about 1%, which would blur comparisons between runs.
+        scores[label] = {n: round(perplexity(m, tok, held[n], a.batch, False), 2) for n in names}
         print(label, scores[label], flush=True)
 
     log = trainer.state.log_history
