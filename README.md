@@ -1,135 +1,112 @@
-# Fine-Tuned AI Assistant Using GPT-2
+# AI Assistant: GPT-2 fine-tuned for conversation
 
-## Project Overview
+A small dialogue assistant: GPT-2 (124M parameters) fine-tuned on the
+ConvAI2 chit-chat dataset, served by a Flask API with a web page, a Tkinter
+desktop app, a Streamlit app and a React front end.
 
-This project aims to develop a customisable AI assistant by fine-tuning the GPT-2 model on a combination of public datasets (`conv_ai_2`) and custom datasets created for specific applications. The AI assistant is capable of responding to user queries in a contextually appropriate manner. The project demonstrates the process of fine-tuning a pre-trained language model and integrating it into various user interfaces, including web-based and desktop-based GUIs.
+I first built it in 2023 and 2024 as my first hands-on language-model
+project. In November 2026 I went back to it, fixed what was wrong, and
+measured it properly (see [Changes](#changes-november-2026)).
 
-## Motivation
+![The web chat page talking to the fine-tuned model](docs/screenshot-web.png)
 
-With the growing demand for specialised AI applications in customer support, education, and personal assistance, this project explores the creation of a tailored AI solution. By leveraging the power of GPT-2, the AI assistant can be adapted to different domains, providing valuable insights into the challenges and benefits of model fine-tuning.
+> It makes small talk, nothing more. A 124M-parameter model trained on
+> crowd-sourced chit-chat does not know facts and will happily invent them.
 
-## Project Setup
+## Results
 
-### Environment
+Perplexity on 269 ConvAI2 dialogues held out from training (whole
+conversations, never seen in training; lower is better):
 
-- **Programming Language**: Python 3.11
-- **Tools and Libraries**:
-  - `transformers`: For model and tokenizer management.
-  - `datasets`: For handling datasets from Hugging Face.
-  - `torch`: For running and fine-tuning the GPT-2 model.
-  - `flask`: For creating a web-based API.
-  - `tkinter`: For creating a desktop GUI.
-  - `streamlit`: For creating an interactive web application.
-  - `boto3`: For interacting with AWS S3 (optional).
+| Model | Held-out perplexity |
+| --- | --- |
+| GPT-2, untuned | 23.33 |
+| GPT-2 fine-tuned on ConvAI2 (1 epoch) | 7.80 |
 
-### Installation
+Run details are in `models/gpt2-convai2/metrics.json` after training:
+2,426 training dialogues (502,400 tokens), 491 steps of 8
+blocks of 128 tokens, learning rate 5e-5, seed 42, 36 minutes on a
+2-core CPU.
 
-To set up the environment:
+Most of that drop comes from learning the format and style of ConvAI2: whose
+turn it is and how these short, chatty lines go. It says the model fits this
+kind of small talk much better; it does not say the replies are helpful or
+true.
 
-1. **Create a Virtual Environment**:
+Same prompts, same random seed (7), both models through the same reply code:
 
-   python -m venv venv
-   source venv/bin/activate  # On Windows use venv\Scripts\activate
+| You | GPT-2, untuned | Fine-tuned |
+| --- | --- | --- |
+| hi, how are you today? | nice, we're good, we have some stuff to do. | i am fine , i am a bit tired from work , but i am getting ready to go to the gym . |
+| what do you do for a living? | I am a teacher. | i am a construction worker, i am doing construction work. |
+| do you have any pets? | No, we just need to get some food. | i am a teacher , i am not sure what that means . |
+| what music do you like? | I like some of the music that I like, like "Ace Of Spades" or "The Red Queen". I'm not sure if I like "The Moth", "The Devil Is A Monster", "Bloodlust", " | i like music , i like to listen to music |
 
-2. **Install Dependencies**:
+The cut-off at the next speaker label flatters the untuned model here. Left
+alone, it runs straight on into invented turns ("I am a teacher. Assistant.
+Associate: what are your hobbies? Association. Accreditation: ..."), and the
+fine-tuned model still drifts off topic (the pets question). Small talk at
+this size is about the format, not the content.
 
-    pip install transformers datasets torch flask tkinter streamlit boto3
+## Run it
 
-3. **Setting Up AWS (Optional): If using AWS for model storage, configure your AWS credentials**:
+```bash
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # or the CUDA build
+pip install -r requirements.txt
 
-    aws configure
+python -m assistant.train --out models/gpt2-convai2      # downloads GPT-2 and ConvAI2, trains, evaluates
+python -m assistant.server --model models/gpt2-convai2   # http://127.0.0.1:5000
+```
 
-## Dataset Preparation
+Other clients, with the server running:
 
-### Public Dataset
+```bash
+pip install -r requirements-clients.txt
+streamlit run clients/streamlit_app.py
+python clients/tkinter_app.py
+cd frontend && npm install && npm start                  # React
+```
 
-- **Dataset**: `conv_ai_2` from Hugging Face.  
-  This dataset provides a collection of conversational data that the model can learn from. It contains dialogues between a user and a bot, covering various scenarios that help in fine-tuning the GPT-2 model for better conversational abilities.
+`python -m assistant.train --max-steps 20 --out /tmp/smoke` is a two-minute check that everything works.
+To add your own dialogues, pass `--custom file.jsonl` in the format of
+`data/custom_dialogues.example.jsonl`; they only ever go into training, never
+into the held-out set.
 
-### Custom Dataset
+Tests: `pip install -r requirements-dev.txt && python -m pytest -q`. They use a
+tiny random GPT-2, so they run in seconds without the trained model.
 
-A custom dataset was also created to tailor the AI assistant to specific domains, such as technical support or customer service. This dataset consists of domain-specific dialogues and queries, formatted as a plain text file (`dataset.txt`). Each line in this file represents a single input-output pair or dialogue. This custom dataset was then combined with the public dataset to provide a richer and more contextually relevant training set.
+## How it works
 
-## Model Fine-Tuning
+- `assistant/data.py`: each ConvAI2 conversation becomes lines labelled
+  `User:` and `Assistant:`, so the model learns whose turn it is. The data
+  is split by whole dialogue with a fixed seed.
+- `assistant/train.py`: Hugging Face `Trainer`, causal language modelling on
+  packed 128-token blocks; held-out perplexity is measured for the untuned
+  and the fine-tuned model on exactly the same blocks.
+- `assistant/model.py`: builds the prompt from the conversation so far, samples
+  a reply (top-p 0.9, top-k 50, temperature 0.7, no repeated 3-grams) and cuts it
+  at the next speaker label.
+- `assistant/server.py`: `POST /api/generate` with `{"input_text": ..., "history": [[user, assistant], ...]}`;
+  empty or over-long input is refused with a 400.
 
-### Process Overview
+## Changes (November 2026)
 
-1. **Model and Tokenizer Loading**:
+What I found when I ran the 2024 code again, and what changed:
 
-   from transformers import GPT2LMHeadModel, GPT2Tokenizer
-   model = GPT2LMHeadModel.from_pretrained('gpt2')
-   tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+| Found | Changed |
+| --- | --- |
+| Replies used greedy decoding. `temperature`, `top_k` and `top_p` were passed to `generate()` without `do_sample=True`, so Transformers ignored them, and replies were flat and repetitive. | Sampling is switched on, with a test that fails if it is ever dropped. |
+| `max_length=50` counted the prompt, so a long question left little or no room for an answer. | `max_new_tokens` limits only the reply. |
+| Training joined each conversation into one line with no speakers, so the model could not tell whose turn it was, and replies ran on into the next turn. | Turns are labelled `User:` / `Assistant:` and the reply is cut at the next label. |
+| The React front end's backend was a placeholder that reversed the input text; it never reached the model. | All four interfaces use the one API. |
+| `requirements.txt` was saved as UTF-16 (pip could not read it) and listed 130 packages, including TensorFlow and Django, that the project never used. | Seven direct dependencies in plain UTF-8. |
+| The custom dataset file in the repository was empty, and there was no evaluation: replies were judged by reading them. | Custom dialogues are optional and documented; held-out perplexity against the untuned model is reported for every run. |
+| Two training scripts were placeholders (three toy sentences) and used `transformers.AdamW`, which newer versions removed. | One training script, with arguments. |
+| No tests or CI. | 11 tests and a GitHub Actions workflow. |
 
-2. **Dataset Combination**: The public dataset (conv_ai_2) was combined with the custom dataset to create a comprehensive training dataset.
+The 2024 training log is kept in `docs/2024-training-log/` for the record:
+3 epochs, 2,622 steps, 3.6 hours; training loss 2.96 at step 500 and 2.21 at
+step 2,500.
 
-3. **Tokenization**: The combined dataset was tokenized using the GPT-2 tokenizer. Special tokens, such as padding tokens, were added as needed:
-
-    def preprocess_function(examples):
-    return tokenizer(examples['text'], truncation=True, padding='max_length', max_length=128)
-
-4. **Training Configuration**: The training was configured with specific parameters, such as the number of epochs, batch size, and learning rate:
-
-    training_args = TrainingArguments(
-    output_dir="./results",
-    num_train_epochs=3,
-    per_device_train_batch_size=4,
-    save_steps=10_000,
-    save_total_limit=2,
-)
-
-5. **Model Fine-Tuning**: The model was fine-tuned using the Trainer class, allowing for efficient training:
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized_dataset,
-        data_collator=data_collator
-)
-trainer.train()
-
-6. **Model Saving**:
-   After training, the fine-tuned model and tokenizer were saved for future deployment:
-
-   trainer.save_model("./fine-tuned-gpt2")
-   tokenizer.save_pretrained("./fine-tuned-gpt2")
-
-## Reflection
-
-### Challenges and Solutions
-
-- **Dataset Preparation**: Combining public and custom datasets required careful preprocessing to ensure consistency in formatting and data structure.
-- **Training Complexity**: Fine-tuning GPT-2 on large datasets was computationally intensive, but using a GPU significantly reduced training time and allowed for more iterations.
-
-### What Went Well
-
-- **Successful Integration**: The integration of the GPT-2 model with both web-based and desktop interfaces was smooth, allowing for flexible user interaction.
-- **Model Performance**: The fine-tuned model generated contextually relevant responses, demonstrating the effectiveness of combining public and custom datasets for training.
-
-### What Didn’t Go as Planned
-
-- **Dataset Issues**: Initially, there were challenges in combining datasets with different structures, which required additional preprocessing steps.
-- **Training Iterations**: The first few training configurations led to overfitting, but this was corrected by adjusting the learning rate and the number of training epochs.
-
-### Future Improvements
-
-- **Dataset Expansion**: In future iterations, including a more diverse range of datasets could further enhance the model’s capabilities and robustness.
-- **Hyperparameter Tuning**: More extensive hyperparameter tuning could lead to better model performance, particularly for specialized tasks.
-
-## Appendix
-
-### Resources Used
-
-- **Python 3.11**
-- **Libraries**: Transformers, Datasets, Torch, Flask, Tkinter, Streamlit, Boto3
-- **Datasets**: `conv_ai_2`, Custom Dataset
-- **Applications**: VS Code, Jupyter Notebooks, NVIDIA GPU
-
-### Key Takeaways
-
-- Fine-tuning pre-trained models can significantly improve performance in specific applications.
-- Proper data preprocessing and validation are crucial for successful model training.
-- Balancing model complexity and performance is essential for creating AI solutions that are both effective and efficient.
-
-
-
-
+The 2026 review and changes were made with Claude as a pair programmer.

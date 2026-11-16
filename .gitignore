@@ -167,3 +167,8 @@ ENV/
 
 results/
 results/runs/Aug30_17-05-09_ELPabloAwakens/events.out.tfevents.1725033910.ELPabloAwakens.9948.0
+
+# 2026: trained models and downloaded data stay out of Git
+models/
+data/*.parquet
+results/

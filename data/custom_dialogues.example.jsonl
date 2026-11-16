@@ -1,0 +1,2 @@
+{"turns": [{"role": "user", "text": "Hi, can you help me reset my password?"}, {"role": "assistant", "text": "Of course. Open Settings, choose Account, then Reset password, and follow the email link."}]}
+{"turns": [{"role": "user", "text": "What time do you open on Saturday?"}, {"role": "assistant", "text": "We open at nine on Saturdays and close at one."}]}

@@ -13,12 +13,12 @@ function App() {
       body: JSON.stringify({ input_text: input }),
     });
     const data = await response.json();
-    setOutput(data.generated_text);
+    setOutput(response.ok ? data.generated_text : `Error: ${data.error}`);
   };
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>AI Text Generator</h1>
+      <h1>AI Assistant</h1>
       <input
         type="text"
         value={input}

@@ -1,33 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Assistant</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistant</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --dim:#94a3b8; --accent:#8b7bff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; justify-content:center; }
+  main { width:min(760px, 100%); padding:32px 20px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  .note { color:var(--dim); margin:0 0 20px; font-size:14px; }
+  #log { background:var(--card); border-radius:14px; padding:18px; min-height:320px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:80%; padding:10px 14px; border-radius:14px; white-space:pre-wrap; }
+  .user { align-self:flex-end; background:var(--accent); color:#0b1020; }
+  .bot { align-self:flex-start; background:#334155; }
+  .bot.err { background:#7f1d1d; }
+  form { display:flex; gap:10px; margin-top:14px; }
+  input { flex:1; padding:12px 14px; border-radius:10px; border:1px solid #334155; background:#0b1222; color:var(--ink); font:inherit; }
+  button { padding:12px 18px; border:0; border-radius:10px; background:var(--accent); color:#0b1020; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  :focus-visible { outline:3px solid #fde047; outline-offset:2px; }
+</style>
 </head>
 <body>
-    <h1>AI Assistant</h1>
-    <form id="text-form">
-        <label for="input_text">Enter your prompt:</label><br>
-        <textarea id="input_text" name="input_text" rows="4" cols="50"></textarea><br><br>
-        <input type="button" value="Generate" onclick="generateText()">
-    </form>
-    <h2>Generated Text:</h2>
-    <p id="output_text"></p>
-
-    <script>
-        async function generateText() {
-            const inputText = document.getElementById("input_text").value;
-            const response = await fetch('/api/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ input_text: inputText })
-            });
-            const result = await response.json();
-            document.getElementById("output_text").innerText = result.generated_text;
-        }
-    </script>
+<main>
+  <h1>AI Assistant</h1>
+  <p class="note">GPT-2 (124M) fine-tuned on ConvAI2 chit-chat. It makes small talk; it does not know facts and will invent things.</p>
+  <div id="log" role="log" aria-live="polite" aria-label="Conversation"></div>
+  <form id="f">
+    <label for="input_text" class="note" style="position:absolute;left:-9999px">Message</label>
+    <input id="input_text" autocomplete="off" maxlength="500" placeholder="Say something…" required>
+    <button id="send">Send</button>
+  </form>
+</main>
+<script>
+  const log = document.getElementById('log'), input = document.getElementById('input_text'), send = document.getElementById('send');
+  const history = [];
+  const add = (cls, text) => { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim(); if (!text) return;
+    add('user', text); input.value = ''; send.disabled = true;
+    try {
+      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input_text: text, history }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      add('bot', j.generated_text || '…'); history.push([text, j.generated_text || '']);
+    } catch (err) { add('bot err', 'Error: ' + err.message); }
+    send.disabled = false; input.focus();
+  });
+</script>
 </body>
 </html>
