@@ -20,3 +20,21 @@ def test_custom_dialogues(tmp_path):
     p.write_text('{"turns": [{"role": "user", "text": "Where is the bus?"}, '
                  '{"role": "assistant", "text": "At stop 4."}]}\n')
     assert load_custom(p) == [f"{USER} Where is the bus?\n{BOT} At stop 4."]
+
+
+def test_detok_undoes_dailydialog_spacing():
+    from assistant.data import detok
+    assert detok("Say , Jim , how ' s it going ?") == "Say, Jim, how's it going?"
+    assert detok("I don ' t know . It costs $ 5 ( maybe ) !") == "I don't know. It costs $5 (maybe)!"
+
+
+def test_dailydialog_and_bst_loaders(tmp_path):
+    import pandas as pd
+    from assistant.data import load_bst, load_dailydialog
+    dd = tmp_path / "dd.parquet"
+    pd.DataFrame({"utterances": [["Hi , Tom !", "Hello . How are you ?", "Fine ."], ["Only one"]]}).to_parquet(dd)
+    assert load_dailydialog(path=dd) == [f"{USER} Hi, Tom!\n{BOT} Hello. How are you?\n{USER} Fine."]
+    bst = tmp_path / "bst.parquet"
+    pd.DataFrame({"previous_utterance": [["I love hiking.", "Me too!"]], "free_messages": [["Where do you go?"]],
+                  "guided_messages": [["Mostly the Mournes."]]}).to_parquet(bst)
+    assert load_bst(path=bst) == [f"{USER} I love hiking.\n{BOT} Me too!\n{USER} Where do you go?\n{BOT} Mostly the Mournes."]

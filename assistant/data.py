@@ -11,6 +11,7 @@ no conversation appears in both training and evaluation.
 """
 import json
 import random
+import re
 from pathlib import Path
 
 USER, BOT = "User:", "Assistant:"
@@ -62,3 +63,53 @@ def split(dialogues, eval_share=0.1, seed=42):
     random.Random(seed).shuffle(items)
     n_eval = max(1, int(len(items) * eval_share))
     return items[n_eval:], items[:n_eval]
+
+
+# ── More dialogue data (2026) ───────────────────────────────────────────────
+# DailyDialog (Li et al., 2017): ~13k everyday two-person conversations, written
+# by people. Licence CC BY-NC-SA 4.0, so models trained on it are for
+# non-commercial use. Blended Skill Talk (Smith et al., 2020): ~7k conversations
+# mixing persona, knowledge and empathy, from Facebook AI's ParlAI.
+# Both are pinned to the Hub's parquet conversions and keep their own
+# validation splits, which are used as held-out sets.
+HUB = "https://huggingface.co/api/datasets/{repo}/parquet/{config}/{split}/0.parquet"
+DAILYDIALOG = ("roskoN/dailydialog", "full")
+BST = ("ParlAI/blended_skill_talk", "default")
+
+_SPACE_BEFORE = re.compile(r"\s+([,.!?;:%)])")
+_SPACE_AFTER = re.compile(r"([($])\s+")
+
+
+def detok(text):
+    """DailyDialog is pre-tokenised ("Say , Jim , how ' s it going ?"); undo that."""
+    t = " ".join(str(text).split())
+    t = _SPACE_BEFORE.sub(r"\1", t)
+    t = _SPACE_AFTER.sub(r"\1", t)
+    t = re.sub(r"\s*([’'])\s*(s|t|re|ve|ll|d|m)\b", r"\1\2", t)
+    t = t.replace(" n't", "n't").replace(" ’ ", "’").replace(" ' ", "'")
+    return t
+
+
+def _alternate(utterances):
+    """Two speakers taking turns: first is User, second Assistant."""
+    return format_dialogue([{"sender_class": "Human" if i % 2 == 0 else "Bot", "text": u}
+                            for i, u in enumerate(utterances)])
+
+
+def load_dailydialog(split="train", path=None):
+    import pandas as pd
+    df = pd.read_parquet(path or HUB.format(repo=DAILYDIALOG[0], config=DAILYDIALOG[1], split=split))
+    return [_alternate([detok(u) for u in row]) for row in df["utterances"] if len(row) >= 2]
+
+
+def load_bst(split="train", path=None):
+    import pandas as pd
+    df = pd.read_parquet(path or HUB.format(repo=BST[0], config=BST[1], split=split))
+    out = []
+    for prev, free, guided in zip(df["previous_utterance"], df["free_messages"], df["guided_messages"]):
+        turns = list(prev)
+        for a, b in zip(free, guided):
+            turns += [a, b]
+        if len(turns) >= 2:
+            out.append(_alternate(turns))
+    return out

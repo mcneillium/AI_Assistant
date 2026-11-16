@@ -172,3 +172,6 @@ results/runs/Aug30_17-05-09_ELPabloAwakens/events.out.tfevents.1725033910.ELPabl
 models/
 data/*.parquet
 results/
+
+# Downloaded datasets (DailyDialog is CC BY-NC-SA; keep raw copies out of the repo)
+data/raw/
